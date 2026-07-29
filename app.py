@@ -109,7 +109,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         centre_point = fitz.Point(centre_x, centre_y)
                         
                         # RAYON DU ROND (Ajustable si vous voulez un rond plus grand ou plus petit)
-                        RAYON = 12.0
+                        RAYON = 15.0
                         
                         couleur_texte = COULEUR_TEXTE_VEGE if is_vege else COULEUR_TEXTE_NORMAL
                         couleur_bordure = COULEUR_BORDURE_VEGE if is_vege else COULEUR_BORDURE_NORMAL
