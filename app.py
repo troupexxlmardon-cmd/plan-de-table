@@ -12,6 +12,9 @@ AIRTABLE_BASE_ID = "appqPIiZcZq2JRZpO"               # Votre Base ID
 AIRTABLE_TABLE_NAME = "Tables"                       # Nom exact de la table dans Airtable
 # ==============================================================================
 
+# Nom du fichier de police déposé sur GitHub
+FONT_PATH = "Lora-Regular.ttf"
+
 st.set_page_config(page_title="Générateur de Plan de Table", page_icon="🪑", layout="centered")
 
 st.title("🪑 Générateur de Plan de Table Nominatif")
@@ -37,10 +40,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             for r in records:
                 fields = r.get("fields", {})
                 
-                # 1. Numéro de place
                 num_place = fields.get("Numéro place") or fields.get("Numero place") or fields.get("Place")
-                
-                # 2. Récupération STRICTE du champ 'Nom complet'
                 raw_nom = fields.get("Nom complet")
                 
                 nom_invite = ""
@@ -49,7 +49,6 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                 elif isinstance(raw_nom, str):
                     nom_invite = raw_nom
 
-                # 3. Statut végétarien
                 col_vege_val = None
                 for k, v in fields.items():
                     if "végétarien" in k.lower() or "vege" in k.lower():
@@ -63,7 +62,6 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                     if str(col_vege_val).strip().lower() in ['oui', 'yes', 'true', '1']:
                         is_vege = True
 
-                # Découpage du prénom et du nom
                 if num_place is not None and nom_invite and not nom_invite.startswith("rec"):
                     try:
                         num_place_int = int(num_place)
@@ -79,10 +77,16 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                     except (ValueError, TypeError):
                         continue
 
-            # 4. Traitement du PDF
+            # Traitement du PDF
             pdf_bytes = pdf_file.read()
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]
+
+            # Enregistrement / enregistrement de la police Lora dans le PDF
+            font_name_use = "helv"  # Police par défaut si le fichier .ttf est introuvable
+            if os.path.exists(FONT_PATH):
+                font_name_use = "Lora"
+                page.insert_font(fontname="Lora", fontfile=FONT_PATH)
 
             words = page.get_text("words")
 
@@ -120,18 +124,18 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         if nom_famille:
                             rect_prenom = fitz.Rect(rect_pave.x0, rect_pave.y0 + 1.0, rect_pave.x1, rect_pave.y0 + MARGE_Y + 1.0)
                             rect_nom = fitz.Rect(rect_pave.x0, rect_pave.y0 + MARGE_Y - 2.0, rect_pave.x1, rect_pave.y1 - 1.0)
-                            page.insert_textbox(rect_prenom, prenom, fontsize=FONT_SIZE, fontname="helv", color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
-                            page.insert_textbox(rect_nom, nom_famille, fontsize=FONT_SIZE, fontname="helv", color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
+                            page.insert_textbox(rect_prenom, prenom, fontsize=FONT_SIZE, fontname=font_name_use, color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
+                            page.insert_textbox(rect_nom, nom_famille, fontsize=FONT_SIZE, fontname=font_name_use, color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
                         else:
                             rect_seul = fitz.Rect(rect_pave.x0, rect_pave.y0 + (MARGE_Y / 2), rect_pave.x1, rect_pave.y1 - (MARGE_Y / 2))
-                            page.insert_textbox(rect_seul, prenom, fontsize=FONT_SIZE, fontname="helv", color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
+                            page.insert_textbox(rect_seul, prenom, fontsize=FONT_SIZE, fontname=font_name_use, color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
 
             output_buffer = io.BytesIO()
             doc.save(output_buffer)
             doc.close()
             output_buffer.seek(0)
 
-            st.success("🎉 Plan de table généré avec succès !")
+            st.success("🎉 Plan de table généré avec succès en police Lora !")
 
             st.download_button(
                 label="📥 Télécharger le Plan de Table PDF",
