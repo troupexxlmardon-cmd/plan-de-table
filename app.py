@@ -16,7 +16,6 @@ st.set_page_config(page_title="Générateur de Plan de Table", page_icon="🪑",
 
 st.title("🪑 Générateur de Plan de Table Nominatif")
 
-# --- COULEURS RGB ---
 COULEUR_TEXTE_NORMAL   = (0.2, 0.2, 0.2)
 COULEUR_BORDURE_NORMAL = (0.75, 0.75, 0.75)
 COULEUR_TEXTE_VEGE     = (0.12, 0.52, 0.29)
@@ -30,7 +29,6 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
         st.error("Veuillez déposer le fichier PDF Canva.")
     else:
         try:
-            # 1. Connexion Airtable
             api = Api(AIRTABLE_TOKEN)
             table = api.table(AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
             records = table.all()
@@ -39,16 +37,26 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             for r in records:
                 fields = r.get("fields", {})
                 
-                # Récupération souple des champs
                 num_place = fields.get("Numéro place") or fields.get("Numero place") or fields.get("Place")
-                nom_raw = fields.get("Invité") or fields.get("Invite") or fields.get("Nom")
                 
+                # Recherche d'un champ texte qui ne commence pas par "rec"
                 nom_invite = ""
-                if isinstance(nom_raw, list) and len(nom_raw) > 0:
-                    nom_invite = str(nom_raw[0])
-                elif isinstance(nom_raw, str):
-                    nom_invite = nom_raw
-                
+                for k, v in fields.items():
+                    # On ignore les champs liés au statut végétarien
+                    if "végétarien" in k.lower() or "vege" in k.lower():
+                        continue
+                    
+                    val_str = ""
+                    if isinstance(v, list) and len(v) > 0:
+                        val_str = str(v[0])
+                    elif isinstance(v, str):
+                        val_str = v
+                    
+                    # On conserve la valeur si ce n'est pas un record ID
+                    if val_str and not val_str.startswith("rec") and not val_str.isdigit():
+                        nom_invite = val_str
+                        break
+
                 # Statut végétarien
                 col_vege_val = None
                 for k, v in fields.items():
@@ -78,16 +86,12 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                     except (ValueError, TypeError):
                         continue
 
-            # AFFICHAGE DE DÉBOGAGE : Vérification des données Airtable chargées
-            st.write("🔍 **Données lues depuis Airtable :**", place_info)
-
-            # 2. Traitement du PDF
+            # Traitement du PDF
             pdf_bytes = pdf_file.read()
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]
 
             words = page.get_text("words")
-            mots_trouves = 0
 
             for word in words:
                 texte_mot = word[4].strip()
@@ -96,7 +100,6 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                     num_place = int(texte_mot)
                     
                     if num_place in place_info:
-                        mots_trouves += 1
                         info = place_info[num_place]
                         prenom = info['prenom']
                         nom_famille = info['nom']
@@ -130,13 +133,12 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                             rect_seul = fitz.Rect(rect_pave.x0, rect_pave.y0 + (MARGE_Y / 2), rect_pave.x1, rect_pave.y1 - (MARGE_Y / 2))
                             page.insert_textbox(rect_seul, prenom, fontsize=FONT_SIZE, fontname="helv", color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
 
-            st.write(f"🎯 **Nombre de places remplacées sur le PDF :** {mots_trouves}")
-
-            # 3. Export
             output_buffer = io.BytesIO()
             doc.save(output_buffer)
             doc.close()
             output_buffer.seek(0)
+
+            st.success("🎉 Plan de table généré avec succès !")
 
             st.download_button(
                 label="📥 Télécharger le Plan de Table PDF",
