@@ -1,12 +1,21 @@
 import streamlit as st
 import pandas as pd
 import fitz  # PyMuPDF
+from pyairtable import Api
 import io
+
+# ==============================================================================
+# 🔑 VOS IDENTIFIANTS AIRTABLE (Remplacez les valeurs ci-dessous)
+# ==============================================================================
+AIRTABLE_TOKEN = "patUDyHWRx3FrQSqn.3ed2ae1fdae0357ba030ddbb947a06283860ff50f2e1fa9885977aaeda19add2"  # Votre Personal Access Token
+AIRTABLE_BASE_ID = "appqPIiZcZq2JRZpO"               # Votre Base ID
+AIRTABLE_TABLE_NAME = "Tables"                       # Nom exact de la table dans Airtable
+# ==============================================================================
 
 st.set_page_config(page_title="Générateur de Plan de Table", page_icon="🪑", layout="centered")
 
 st.title("🪑 Générateur de Plan de Table Nominatif")
-st.write("Déposez votre PDF Canva et votre export CSV d'Airtable pour générer votre plan mis à jour.")
+st.write("Déposez votre PDF Canva pour générer automatiquement votre plan à jour depuis Airtable.")
 
 # Couleurs RGB (0 à 1)
 COULEUR_TEXTE_NORMAL   = (0.2, 0.2, 0.2)
@@ -17,38 +26,45 @@ COULEUR_BORDURE_VEGE   = (0.12, 0.52, 0.29)
 
 COULEUR_FOND           = (1, 1, 1)
 
-col1, col2 = st.columns(2)
-
-with col1:
-    pdf_file = st.file_uploader("1. Déposez le PDF Canva", type=["pdf"])
-
-with col2:
-    csv_file = st.file_uploader("2. Déposez le CSV Airtable", type=["csv"])
+# Zone de dépôt unique pour le PDF
+pdf_file = st.file_uploader("Déposez le PDF Canva (ex: plan_de_table_canva.pdf)", type=["pdf"])
 
 if st.button("🚀 Générer le plan de table", type="primary", use_container_width=True):
-    if pdf_file is None or csv_file is None:
-        st.error("Veuillez déposer le fichier PDF ET le fichier CSV avant de lancer la génération.")
+    if not pdf_file:
+        st.error("Veuillez déposer le fichier PDF Canva.")
     else:
         try:
-            # 1. Lecture CSV
-            df = pd.read_csv(csv_file)
-            col_vege = [c for c in df.columns if 'Végétarien' in c]
-            col_vege = col_vege[0] if col_vege else None
+            # 1. Connexion et Récupération des données Airtable
+            with st.spinner("Récupération des données Airtable en direct..."):
+                api = Api(AIRTABLE_TOKEN)
+                table = api.table(AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
+                records = table.all()
 
             place_info = {}
-            for _, row in df.iterrows():
-                try:
-                    num_place = int(row['Numéro place'])
-                    nom_invite = str(row['Invité'])
-                    
-                    is_vege = False
-                    if col_vege and pd.notna(row[col_vege]):
-                        val_vege = str(row[col_vege]).strip().lower()
-                        if val_vege in ['oui', 'yes', 'true', '1']:
-                            is_vege = True
+            for r in records:
+                fields = r.get("fields", {})
+                
+                num_place = fields.get("Numéro place")
+                nom_invite = fields.get("Invité")
+                
+                # Statut végétarien
+                col_vege_val = None
+                for k, v in fields.items():
+                    if "Végétarien" in k:
+                        col_vege_val = v
+                        break
+                
+                is_vege = False
+                if col_vege_val:
+                    if isinstance(col_vege_val, list):
+                        col_vege_val = col_vege_val[0]
+                    if str(col_vege_val).strip().lower() in ['oui', 'yes', 'true', '1']:
+                        is_vege = True
 
-                    if pd.notna(nom_invite) and nom_invite.strip() != "":
-                        parties = nom_invite.strip().split(maxsplit=1)
+                if num_place and nom_invite:
+                    try:
+                        num_place = int(num_place)
+                        parties = str(nom_invite).strip().split(maxsplit=1)
                         prenom = parties[0]
                         nom_famille = parties[1] if len(parties) > 1 else ""
                         
@@ -57,10 +73,10 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                             'nom': nom_famille,
                             'is_vege': is_vege
                         }
-                except (ValueError, TypeError):
-                    continue
+                    except (ValueError, TypeError):
+                        continue
 
-            # 2. Traitement PDF
+            # 2. Traitement du PDF Canva
             pdf_bytes = pdf_file.read()
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]
@@ -107,13 +123,13 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                             rect_seul = fitz.Rect(rect_pave.x0, rect_pave.y0 + (MARGE_Y / 2), rect_pave.x1, rect_pave.y1 - (MARGE_Y / 2))
                             page.insert_textbox(rect_seul, prenom, fontsize=FONT_SIZE, fontname="helv", color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
 
-            # 3. Exportation
+            # 3. Export
             output_buffer = io.BytesIO()
             doc.save(output_buffer)
             doc.close()
             output_buffer.seek(0)
 
-            st.success("🎉 Plan de table généré avec succès !")
+            st.success("🎉 Plan de table généré avec succès en direct depuis Airtable !")
             
             st.download_button(
                 label="📥 Télécharger le Plan de Table PDF",
