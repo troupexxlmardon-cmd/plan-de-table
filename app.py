@@ -112,7 +112,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         couleur_texte = COULEUR_TEXTE_VEGE if is_vege else COULEUR_TEXTE_NORMAL
                         couleur_bordure = COULEUR_BORDURE_VEGE if is_vege else COULEUR_BORDURE_NORMAL
                         
-                        # 1. Dessin du cercle blanc
+                        # 1. Dessin du cercle
                         page.draw_circle(
                             centre_point, 
                             radius=RAYON, 
@@ -121,31 +121,43 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                             width=0.6 if is_vege else 0.5
                         )
                         
-                        # 2. Zone de texte unique
-                        # On restreint légèrement la largeur (RAYON * 0.85) pour ne pas frôler les bords courbes du cercle
-                        LARGEUR_TEXTE = RAYON * 0.85
-                        HAUTEUR_TEXTE = RAYON * 0.85
+                        # 2. Définition du rectangle de saisie élargi et recentré verticalement
+                        # Le décalage (+1.0) permet d'abaisser légèrement le texte pour un centrage parfait dans le rond
+                        LARGEUR_BOITE = RAYON * 0.95
+                        HAUTEUR_BOITE = RAYON * 0.75
                         
                         rect_texte = fitz.Rect(
-                            centre_x - LARGEUR_TEXTE,
-                            centre_y - HAUTEUR_TEXTE,
-                            centre_x + LARGEUR_TEXTE,
-                            centre_y + HAUTEUR_TEXTE
+                            centre_x - LARGEUR_BOITE,
+                            centre_y - HAUTEUR_BOITE + 1.0,
+                            centre_x + LARGEUR_BOITE,
+                            centre_y + HAUTEUR_BOITE + 1.0
                         )
                         
-                        # Assemblage du texte
                         texte_complet = f"{prenom}\n{nom_famille}" if nom_famille else prenom
+                        lignes_attendues = 2 if nom_famille else 1
                         
-                        # Ajustement dynamique de la taille selon la longueur du nom
+                        # 3. Recherche automatique de la taille de police idéale
                         taille_police = 4.2
-                        longueur_max = max(len(prenom), len(nom_famille))
+                        min_taille = 2.6
+                        pas = 0.2
                         
-                        if longueur_max > 12:
-                            taille_police = 3.2
-                        elif longueur_max > 9:
-                            taille_police = 3.6
+                        while taille_police >= min_taille:
+                            # Test pour vérifier si le texte rentre sans créer de lignes supplémentaires
+                            res = page.insert_textbox(
+                                rect_texte, 
+                                texte_complet, 
+                                fontsize=taille_police, 
+                                fontname=font_name_use, 
+                                color=couleur_texte, 
+                                align=fitz.TEXT_ALIGN_CENTER,
+                                render_mode=3  # Mode invisible pour le test
+                            )
+                            # Si res >= 0, le texte rentre parfaitement dans la boîte
+                            if res >= 0:
+                                break
+                            taille_police -= pas
 
-                        # Insertion du texte dans la boîte unique
+                        # 4. Insertion définitive du texte avec la bonne taille
                         page.insert_textbox(
                             rect_texte, 
                             texte_complet, 
@@ -160,7 +172,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             doc.close()
             output_buffer.seek(0)
 
-            st.success("🎉 Plan de table généré avec succès avec un centrage parfait !")
+            st.success("🎉 Plan de table généré avec succès !")
 
             st.download_button(
                 label="📥 Télécharger le Plan de Table PDF",
@@ -169,9 +181,6 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                 mime="application/pdf",
                 type="primary"
             )
-
-        except Exception as e:
-            st.error(f"Erreur : {e}")
 
         except Exception as e:
             st.error(f"Erreur : {e}")
