@@ -82,10 +82,14 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]
 
-            font_name_use = "helv"
+            # Chargement de la police pour le calcul métrique
             if os.path.exists(FONT_PATH):
+                font = fitz.Font(fontfile=FONT_PATH)
                 font_name_use = "Lora"
                 page.insert_font(fontname="Lora", fontfile=FONT_PATH)
+            else:
+                font = fitz.Font("helv")
+                font_name_use = "helv"
 
             words = page.get_text("words")
 
@@ -112,7 +116,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         couleur_texte = COULEUR_TEXTE_VEGE if is_vege else COULEUR_TEXTE_NORMAL
                         couleur_bordure = COULEUR_BORDURE_VEGE if is_vege else COULEUR_BORDURE_NORMAL
                         
-                        # 1. Dessin du cercle
+                        # 1. Dessin du cercle blanc
                         page.draw_circle(
                             centre_point, 
                             radius=RAYON, 
@@ -121,51 +125,57 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                             width=0.6 if is_vege else 0.5
                         )
                         
-                        # 2. Définition du rectangle de saisie élargi et recentré verticalement
-                        # Le décalage (+1.0) permet d'abaisser légèrement le texte pour un centrage parfait dans le rond
-                        LARGEUR_BOITE = RAYON * 0.95
-                        HAUTEUR_BOITE = RAYON * 0.75
-                        
-                        rect_texte = fitz.Rect(
-                            centre_x - LARGEUR_BOITE,
-                            centre_y - HAUTEUR_BOITE + 1.0,
-                            centre_x + LARGEUR_BOITE,
-                            centre_y + HAUTEUR_BOITE + 1.0
-                        )
-                        
-                        texte_complet = f"{prenom}\n{nom_famille}" if nom_famille else prenom
-                        lignes_attendues = 2 if nom_famille else 1
-                        
-                        # 3. Recherche automatique de la taille de police idéale
+                        # 2. Adaptation dynamique de la taille de police pour que tout rentre en largeur
                         taille_police = 4.2
                         min_taille = 2.6
-                        pas = 0.2
+                        largeur_max_permise = (RAYON * 2) - 4.0  # Marge de sécurité interne au rond
                         
                         while taille_police >= min_taille:
-                            # Test pour vérifier si le texte rentre sans créer de lignes supplémentaires
-                            res = page.insert_textbox(
-                                rect_texte, 
-                                texte_complet, 
-                                fontsize=taille_police, 
-                                fontname=font_name_use, 
-                                color=couleur_texte, 
-                                align=fitz.TEXT_ALIGN_CENTER,
-                                render_mode=3  # Mode invisible pour le test
-                            )
-                            # Si res >= 0, le texte rentre parfaitement dans la boîte
-                            if res >= 0:
+                            l1 = font.text_length(prenom, fontsize=taille_police)
+                            l2 = font.text_length(nom_famille, fontsize=taille_police) if nom_famille else 0
+                            if max(l1, l2) <= largeur_max_permise:
                                 break
-                            taille_police -= pas
+                            taille_police -= 0.2
 
-                        # 4. Insertion définitive du texte avec la bonne taille
-                        page.insert_textbox(
-                            rect_texte, 
-                            texte_complet, 
-                            fontsize=taille_police, 
-                            fontname=font_name_use, 
-                            color=couleur_texte, 
-                            align=fitz.TEXT_ALIGN_CENTER
+                        # 3. Calculs métriques exacts pour un centrage vertical absolu
+                        ascent = font.ascent * taille_police
+                        descent = font.descent * taille_police  # Valeur négative
+                        hauteur_ligne = ascent - descent
+                        interligne = hauteur_ligne * 0.25  # Espace naturel entre prénom et nom
+                        
+                        nb_lignes = 2 if nom_famille else 1
+                        hauteur_totale_bloc = (nb_lignes * hauteur_ligne) + ((nb_lignes - 1) * interligne)
+                        
+                        # Détermination du haut du bloc visuel
+                        haut_bloc = centre_y - (hauteur_totale_bloc / 2.0)
+                        
+                        # Coordonnée Y de la ligne de base (baseline) de la première ligne
+                        baseline_1 = haut_bloc + ascent
+                        
+                        # 4. Écriture directe ligne par ligne
+                        # Ligne 1 : Prénom
+                        larg_p = font.text_length(prenom, fontsize=taille_police)
+                        x_p = centre_x - (larg_p / 2.0)
+                        page.insert_text(
+                            fitz.Point(x_p, baseline_1),
+                            prenom,
+                            fontsize=taille_police,
+                            fontname=font_name_use,
+                            color=couleur_texte
                         )
+                        
+                        # Ligne 2 : Nom de famille (si présent)
+                        if nom_famille:
+                            baseline_2 = baseline_1 + hauteur_ligne + interligne
+                            larg_n = font.text_length(nom_famille, fontsize=taille_police)
+                            x_n = centre_x - (larg_n / 2.0)
+                            page.insert_text(
+                                fitz.Point(x_n, baseline_2),
+                                nom_famille,
+                                fontsize=taille_police,
+                                fontname=font_name_use,
+                                color=couleur_texte
+                            )
 
             output_buffer = io.BytesIO()
             doc.save(output_buffer)
