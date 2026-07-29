@@ -103,18 +103,16 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         
                         x0, y0, x1, y1 = word[0], word[1], word[2], word[3]
                         
-                        # --- CALCUL DU CENTRE DU ROND ---
                         centre_x = (x0 + x1) / 2.0
                         centre_y = (y0 + y1) / 2.0
                         centre_point = fitz.Point(centre_x, centre_y)
                         
-                        # RAYON DU ROND (Ajustable si vous voulez un rond plus grand ou plus petit)
-                        RAYON = 15.0
+                        RAYON = 12.0
                         
                         couleur_texte = COULEUR_TEXTE_VEGE if is_vege else COULEUR_TEXTE_NORMAL
                         couleur_bordure = COULEUR_BORDURE_VEGE if is_vege else COULEUR_BORDURE_NORMAL
                         
-                        # 1. DESSIN DU ROND BLANC AVEC LA BORDURE (VERTE OU GRISE)
+                        # 1. Dessin du cercle blanc
                         page.draw_circle(
                             centre_point, 
                             radius=RAYON, 
@@ -123,31 +121,46 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                             width=0.6 if is_vege else 0.5
                         )
                         
-                        # 2. ZONE POUR ÉCRIRE LE TEXTE AU CENTRE DU ROND
-                        rect_pave = fitz.Rect(
-                            centre_x - RAYON, 
-                            centre_y - RAYON, 
-                            centre_x + RAYON, 
-                            centre_y + RAYON
+                        # 2. Zone de texte unique
+                        # On restreint légèrement la largeur (RAYON * 0.85) pour ne pas frôler les bords courbes du cercle
+                        LARGEUR_TEXTE = RAYON * 0.85
+                        HAUTEUR_TEXTE = RAYON * 0.85
+                        
+                        rect_texte = fitz.Rect(
+                            centre_x - LARGEUR_TEXTE,
+                            centre_y - HAUTEUR_TEXTE,
+                            centre_x + LARGEUR_TEXTE,
+                            centre_y + HAUTEUR_TEXTE
                         )
                         
-                        FONT_SIZE = 4.2
+                        # Assemblage du texte
+                        texte_complet = f"{prenom}\n{nom_famille}" if nom_famille else prenom
                         
-                        if nom_famille:
-                            rect_prenom = fitz.Rect(rect_pave.x0, rect_pave.y0 + 2.5, rect_pave.x1, centre_y + 1.0)
-                            rect_nom = fitz.Rect(rect_pave.x0, centre_y - 1.0, rect_pave.x1, rect_pave.y1 - 2.0)
-                            page.insert_textbox(rect_prenom, prenom, fontsize=FONT_SIZE, fontname=font_name_use, color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
-                            page.insert_textbox(rect_nom, nom_famille, fontsize=FONT_SIZE, fontname=font_name_use, color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
-                        else:
-                            rect_seul = fitz.Rect(rect_pave.x0, centre_y - 3.0, rect_pave.x1, centre_y + 3.0)
-                            page.insert_textbox(rect_seul, prenom, fontsize=FONT_SIZE, fontname=font_name_use, color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
+                        # Ajustement dynamique de la taille selon la longueur du nom
+                        taille_police = 4.2
+                        longueur_max = max(len(prenom), len(nom_famille))
+                        
+                        if longueur_max > 12:
+                            taille_police = 3.2
+                        elif longueur_max > 9:
+                            taille_police = 3.6
+
+                        # Insertion du texte dans la boîte unique
+                        page.insert_textbox(
+                            rect_texte, 
+                            texte_complet, 
+                            fontsize=taille_police, 
+                            fontname=font_name_use, 
+                            color=couleur_texte, 
+                            align=fitz.TEXT_ALIGN_CENTER
+                        )
 
             output_buffer = io.BytesIO()
             doc.save(output_buffer)
             doc.close()
             output_buffer.seek(0)
 
-            st.success("🎉 Plan de table généré avec succès !")
+            st.success("🎉 Plan de table généré avec succès avec un centrage parfait !")
 
             st.download_button(
                 label="📥 Télécharger le Plan de Table PDF",
@@ -156,6 +169,9 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                 mime="application/pdf",
                 type="primary"
             )
+
+        except Exception as e:
+            st.error(f"Erreur : {e}")
 
         except Exception as e:
             st.error(f"Erreur : {e}")
