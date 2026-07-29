@@ -44,41 +44,39 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                 fields = r.get("fields", {})
                 
                 num_place = fields.get("Numéro place")
-                nom_raw = fields.get("Invité")
                 
-                # --- Traitement spécifique si "Invité" est une liste (Linked Record / Lookup) ---
+                # --- Récupération spécifique du nom dans la colonne 'Invité' ---
                 nom_invite = ""
-                if isinstance(nom_raw, list) and len(nom_raw) > 0:
-                    nom_invite = str(nom_raw[0])
-                elif isinstance(nom_raw, str):
-                    nom_invite = nom_raw
                 
-                # Si la valeur obtenue est un Record ID (ex: 'recXYZ'), on cherche un champ texte dans la ligne
-                if nom_invite.startswith("rec"):
-                    for k, v in fields.items():
-                        if any(term in k.lower() for term in ["invité", "nom", "prenom", "invite"]):
-                            if isinstance(v, str) and not v.startswith("rec"):
-                                nom_invite = v
-                                break
-                            elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], str) and not v[0].startswith("rec"):
-                                nom_invite = v[0]
-                                break
+                # On cherche la valeur du champ 'Invité'
+                raw_val = None
+                for k, v in fields.items():
+                    # Priorité à la colonne 'Invité' exacte ou au Lookup 'Invité (from...)'
+                    # tout en ignorant les colonnes contenant 'végétarien'
+                    if k.strip() == "Invité" or ("invité" in k.lower() and "végétarien" not in k.lower() and "vege" not in k.lower()):
+                        raw_val = v
+                        break
+
+                if isinstance(raw_val, list) and len(raw_val) > 0:
+                    nom_invite = str(raw_val[0])
+                elif isinstance(raw_val, str):
+                    nom_invite = raw_val
 
                 # --- Récupération du statut végétarien ---
                 col_vege_val = None
                 for k, v in fields.items():
-                    if "Végétarien" in k:
+                    if "végétarien" in k.lower() or "vege" in k.lower():
                         col_vege_val = v
                         break
                 
                 is_vege = False
                 if col_vege_val:
-                    if isinstance(col_vege_val, list):
+                    if isinstance(col_vege_val, list) and len(col_vege_val) > 0:
                         col_vege_val = col_vege_val[0]
                     if str(col_vege_val).strip().lower() in ['oui', 'yes', 'true', '1']:
                         is_vege = True
 
-                # Découpage du prénom et du nom
+                # Découpage du prénom et du nom si le nom est bien une chaîne valide
                 if num_place and nom_invite and not nom_invite.startswith("rec"):
                     try:
                         num_place = int(num_place)
@@ -123,7 +121,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         couleur_texte = COULEUR_TEXTE_VEGE if is_vege else COULEUR_TEXTE_NORMAL
                         couleur_bordure = COULEUR_BORDURE_VEGE if is_vege else COULEUR_BORDURE_NORMAL
                         
-                        # Dessin du pavé blanc avec la bordure (verte pour végé, grise sinon)
+                        # Dessin du pavé blanc avec la bordure (verte pour végétarien, grise sinon)
                         page.draw_rect(
                             rect_pave, 
                             color=couleur_bordure, 
@@ -158,6 +156,9 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                 mime="application/pdf",
                 type="primary"
             )
+
+        except Exception as e:
+            st.error(f"Erreur lors de la génération : {e}")
 
         except Exception as e:
             st.error(f"Erreur lors de la génération : {e}")
