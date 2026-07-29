@@ -5,3 +5,5 @@ PyMuPDF
 pyairtable
 pandas
 python-multipart
+requests
+pydantic
