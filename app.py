@@ -37,27 +37,19 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             for r in records:
                 fields = r.get("fields", {})
                 
+                # 1. Numéro de place
                 num_place = fields.get("Numéro place") or fields.get("Numero place") or fields.get("Place")
                 
-                # Recherche d'un champ texte qui ne commence pas par "rec"
+                # 2. Récupération STRICTE du champ 'Nom complet'
+                raw_nom = fields.get("Nom complet")
+                
                 nom_invite = ""
-                for k, v in fields.items():
-                    # On ignore les champs liés au statut végétarien
-                    if "végétarien" in k.lower() or "vege" in k.lower():
-                        continue
-                    
-                    val_str = ""
-                    if isinstance(v, list) and len(v) > 0:
-                        val_str = str(v[0])
-                    elif isinstance(v, str):
-                        val_str = v
-                    
-                    # On conserve la valeur si ce n'est pas un record ID
-                    if val_str and not val_str.startswith("rec") and not val_str.isdigit():
-                        nom_invite = val_str
-                        break
+                if isinstance(raw_nom, list) and len(raw_nom) > 0:
+                    nom_invite = str(raw_nom[0])
+                elif isinstance(raw_nom, str):
+                    nom_invite = raw_nom
 
-                # Statut végétarien
+                # 3. Statut végétarien
                 col_vege_val = None
                 for k, v in fields.items():
                     if "végétarien" in k.lower() or "vege" in k.lower():
@@ -71,7 +63,8 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                     if str(col_vege_val).strip().lower() in ['oui', 'yes', 'true', '1']:
                         is_vege = True
 
-                if num_place is not None and nom_invite:
+                # Découpage du prénom et du nom
+                if num_place is not None and nom_invite and not nom_invite.startswith("rec"):
                     try:
                         num_place_int = int(num_place)
                         parties = str(nom_invite).strip().split(maxsplit=1)
@@ -86,7 +79,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                     except (ValueError, TypeError):
                         continue
 
-            # Traitement du PDF
+            # 4. Traitement du PDF
             pdf_bytes = pdf_file.read()
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]
