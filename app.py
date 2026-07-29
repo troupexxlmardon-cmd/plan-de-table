@@ -82,11 +82,14 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]
 
-            # Charger la police externe Lora ou Helvetica par défaut
+            # Charger et enregistrer la police
             if os.path.exists(FONT_PATH):
                 font = fitz.Font(fontfile=FONT_PATH)
+                font_name_use = "Lora"
+                page.insert_font(fontname="Lora", fontfile=FONT_PATH)
             else:
                 font = fitz.Font("helv")
+                font_name_use = "helv"
 
             words = page.get_text("words")
 
@@ -146,7 +149,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         haut_bloc = centre_y - (hauteur_totale_bloc / 2.0)
                         baseline_1 = haut_bloc + ascent
                         
-                        # 4. Écriture directe des lignes via l'objet font
+                        # 4. Écriture directe des lignes
                         # Prénom
                         larg_p = font.text_length(prenom, fontsize=taille_police)
                         x_p = centre_x - (larg_p / 2.0)
@@ -154,7 +157,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                             fitz.Point(x_p, baseline_1),
                             prenom,
                             fontsize=taille_police,
-                            font=font,
+                            fontname=font_name_use,
                             color=couleur_texte
                         )
                         
@@ -167,7 +170,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                                 fitz.Point(x_n, baseline_2),
                                 nom_famille,
                                 fontsize=taille_police,
-                                font=font,
+                                fontname=font_name_use,
                                 color=couleur_texte
                             )
 
