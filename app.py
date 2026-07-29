@@ -107,7 +107,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         centre_y = (y0 + y1) / 2.0
                         centre_point = fitz.Point(centre_x, centre_y)
                         
-                        RAYON = 12.0
+                        RAYON = 16.0
                         
                         couleur_texte = COULEUR_TEXTE_VEGE if is_vege else COULEUR_TEXTE_NORMAL
                         couleur_bordure = COULEUR_BORDURE_VEGE if is_vege else COULEUR_BORDURE_NORMAL
