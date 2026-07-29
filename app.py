@@ -13,7 +13,6 @@ AIRTABLE_BASE_ID = "appqPIiZcZq2JRZpO"               # Votre Base ID
 AIRTABLE_TABLE_NAME = "Tables"                       # Nom exact de la table dans Airtable
 # ==============================================================================
 
-# Nom du fichier de police déposé sur GitHub
 FONT_PATH = "Lora-Regular.ttf"
 
 st.set_page_config(page_title="Générateur de Plan de Table", page_icon="🪑", layout="centered")
@@ -83,8 +82,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]
 
-            # Enregistrement / enregistrement de la police Lora dans le PDF
-            font_name_use = "helv"  # Police par défaut si le fichier .ttf est introuvable
+            font_name_use = "helv"
             if os.path.exists(FONT_PATH):
                 font_name_use = "Lora"
                 page.insert_font(fontname="Lora", fontfile=FONT_PATH)
@@ -105,30 +103,43 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         
                         x0, y0, x1, y1 = word[0], word[1], word[2], word[3]
                         
-                        MARGE_X = 16.0
-                        MARGE_Y = 10.0
+                        # --- CALCUL DU CENTRE DU ROND ---
+                        centre_x = (x0 + x1) / 2.0
+                        centre_y = (y0 + y1) / 2.0
+                        centre_point = fitz.Point(centre_x, centre_y)
                         
-                        rect_pave = fitz.Rect(x0 - MARGE_X, y0 - MARGE_Y, x1 + MARGE_X, y1 + MARGE_Y)
+                        # RAYON DU ROND (Ajustable si vous voulez un rond plus grand ou plus petit)
+                        RAYON = 12.0
                         
                         couleur_texte = COULEUR_TEXTE_VEGE if is_vege else COULEUR_TEXTE_NORMAL
                         couleur_bordure = COULEUR_BORDURE_VEGE if is_vege else COULEUR_BORDURE_NORMAL
                         
-                        page.draw_rect(
-                            rect_pave, 
+                        # 1. DESSIN DU ROND BLANC AVEC LA BORDURE (VERTE OU GRISE)
+                        page.draw_circle(
+                            centre_point, 
+                            radius=RAYON, 
                             color=couleur_bordure, 
                             fill=COULEUR_FOND, 
                             width=0.6 if is_vege else 0.5
                         )
                         
-                        FONT_SIZE = 4.5
+                        # 2. ZONE POUR ÉCRIRE LE TEXTE AU CENTRE DU ROND
+                        rect_pave = fitz.Rect(
+                            centre_x - RAYON, 
+                            centre_y - RAYON, 
+                            centre_x + RAYON, 
+                            centre_y + RAYON
+                        )
+                        
+                        FONT_SIZE = 4.2
                         
                         if nom_famille:
-                            rect_prenom = fitz.Rect(rect_pave.x0, rect_pave.y0 + 1.0, rect_pave.x1, rect_pave.y0 + MARGE_Y + 1.0)
-                            rect_nom = fitz.Rect(rect_pave.x0, rect_pave.y0 + MARGE_Y - 2.0, rect_pave.x1, rect_pave.y1 - 1.0)
+                            rect_prenom = fitz.Rect(rect_pave.x0, rect_pave.y0 + 2.5, rect_pave.x1, centre_y + 1.0)
+                            rect_nom = fitz.Rect(rect_pave.x0, centre_y - 1.0, rect_pave.x1, rect_pave.y1 - 2.0)
                             page.insert_textbox(rect_prenom, prenom, fontsize=FONT_SIZE, fontname=font_name_use, color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
                             page.insert_textbox(rect_nom, nom_famille, fontsize=FONT_SIZE, fontname=font_name_use, color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
                         else:
-                            rect_seul = fitz.Rect(rect_pave.x0, rect_pave.y0 + (MARGE_Y / 2), rect_pave.x1, rect_pave.y1 - (MARGE_Y / 2))
+                            rect_seul = fitz.Rect(rect_pave.x0, centre_y - 3.0, rect_pave.x1, centre_y + 3.0)
                             page.insert_textbox(rect_seul, prenom, fontsize=FONT_SIZE, fontname=font_name_use, color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
 
             output_buffer = io.BytesIO()
@@ -136,7 +147,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             doc.close()
             output_buffer.seek(0)
 
-            st.success("🎉 Plan de table généré avec succès en police Lora !")
+            st.success("🎉 Plan de table généré avec succès !")
 
             st.download_button(
                 label="📥 Télécharger le Plan de Table PDF",
