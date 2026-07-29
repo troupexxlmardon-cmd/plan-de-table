@@ -1,9 +1,10 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import Response
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel  # <-- L'import manquant était ici !
 import fitz  # PyMuPDF
 from pyairtable import Api
 import io
 import os
+import requests
 
 app = FastAPI(title="Générateur Plan de Table Airtable")
 
