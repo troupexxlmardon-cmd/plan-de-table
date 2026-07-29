@@ -17,20 +17,28 @@ AIRTABLE_TABLE_NAME = "Tables"                       # Nom exact de la table dan
 
 FONT_PATH = "Lora-Regular.ttf"
 
+class PlanRequest(BaseModel):
+    file_url: str
+    record_id: str
+
 @app.get("/")
 def read_root():
     return {"message": "L'API du Plan de Table fonctionne correctement !"}
 
 @app.post("/generate-plan")
-async def generate_plan(file: UploadFile = File(...)):
+async def generate_plan(payload: PlanRequest):
     try:
-        # 1. Lecture du fichier PDF envoyé
-        pdf_bytes = await file.read()
+        # 1. Téléchargement du PDF source depuis l'URL Airtable
+        pdf_response = requests.get(payload.file_url)
+        if pdf_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Impossible de télécharger le PDF source.")
         
-        # 2. Récupération des données Airtable
+        pdf_bytes = pdf_response.content
+
+        # 2. Récupération des invités depuis Airtable
         api = Api(AIRTABLE_TOKEN)
-        table = api.table(AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
-        records = table.all()
+        table_invites = api.table(AIRTABLE_BASE_ID, TABLE_INVITES_NAME)
+        records = table_invites.all()
 
         place_info = {}
         for r in records:
@@ -72,7 +80,7 @@ async def generate_plan(file: UploadFile = File(...)):
                 except (ValueError, TypeError):
                     continue
 
-        # 3. Traitement du PDF avec le moteur typographique sur mesure
+        # 3. Traitement du PDF
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         page = doc[0]
 
@@ -142,12 +150,34 @@ async def generate_plan(file: UploadFile = File(...)):
                         x_n = centre_x - (larg_n / 2.0)
                         page.insert_text(fitz.Point(x_n, baseline_2), nom_famille, fontsize=taille_police, fontname=font_name_use, color=couleur_texte)
 
+        # Save result to bytes
         output_buffer = io.BytesIO()
         doc.save(output_buffer)
         doc.close()
         pdf_out = output_buffer.getvalue()
 
-        return Response(content=pdf_out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=plan_de_table.pdf"})
+        # 4. Upload ou mise à jour directe dans Airtable
+        # Note : PyAirtable accepte de mettre à jour un attachment via une URL temporaire ou en envoyant le fichier.
+        # Pour faire simple avec Airtable, on utilise l'API de transfert direct d'Airtable
+        table_docs = api.table(AIRTABLE_BASE_ID, TABLE_DOCS_NAME)
+        
+        # Astuce : On upload le fichier généré en utilisant l'API d'attachment de pyairtable
+        # Si vous utilisez pyairtable 2.x+, upload d'attachement direct :
+        # On peut attacher directement le fichier via l'API Airtable
+        
+        # Pour une compatibilité maximale sans serveur de stockage externe :
+        # On sauve temporairement en mémoire et on injecte le fichier dans Airtable
+        import base64
+        # PyAirtable v2+ supporte l'attachment direct ou via URL.
+        # Sinon, pour la méthode la plus simple sans hébergement temporaire :
+        # On renvoie la réponse et laisse Airtable se mettre à jour via un webhook ou upload
+        
+        # Si vous utilisez pyairtable v2.2+ :
+        table_docs.upload_attachment(payload.record_id, "Dernier plan", "Plan_de_table_NOMINATIF.pdf", pdf_out)
 
+        return {"status": "success", "message": "Plan de table généré et enregistré dans 'Dernier plan'"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
