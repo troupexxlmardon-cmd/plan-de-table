@@ -5,16 +5,17 @@ from pyairtable import Api
 import io
 import os
 import requests
+import time
 
 app = FastAPI(title="Générateur Plan de Table Airtable")
 
 # ==============================================================================
 # 🔑 VOS IDENTIFIANTS AIRTABLE
 # ==============================================================================
-AIRTABLE_TOKEN = "patUDyHWRx3FrQSqn.3ed2ae1fdae0357ba030ddbb947a06283860ff50f2e1fa9885977aaeda19add2"
+AIRTABLE_TOKEN = "patUeoUFl3qVPww4b.01ee555ff3aef9d6c3993102a1438919965e1d1e3b5df4062f8f2d3d858fb948"
 AIRTABLE_BASE_ID = "appqPIiZcZq2JRZpO"
-TABLE_INVITES_NAME = "Tables"             # Table contenant les invités/places
-TABLE_DOCS_NAME = "Plan de table doc"     # Table contenant le doc PDF
+TABLE_INVITES_NAME = "Tables"             # Table des invités
+TABLE_DOCS_NAME = "Plan de table doc"     # Table des documents
 # ==============================================================================
 
 FONT_PATH = "Lora-Regular.ttf"
@@ -24,17 +25,20 @@ class PlanRequest(BaseModel):
     record_id: str
 
 def process_plan_in_background(file_url: str, record_id: str):
+    api = Api(AIRTABLE_TOKEN)
+    table_docs = api.table(AIRTABLE_BASE_ID, TABLE_DOCS_NAME)
+
     try:
         # 1. Téléchargement du PDF source
         pdf_response = requests.get(file_url)
         if pdf_response.status_code != 200:
-            print("Erreur de téléchargement du PDF source")
+            print("❌ Erreur de téléchargement du PDF source")
+            table_docs.update(record_id, {"Statut": "Ready"})
             return
         
         pdf_bytes = pdf_response.content
 
         # 2. Récupération des invités
-        api = Api(AIRTABLE_TOKEN)
         table_invites = api.table(AIRTABLE_BASE_ID, TABLE_INVITES_NAME)
         records = table_invites.all()
 
@@ -153,13 +157,26 @@ def process_plan_in_background(file_url: str, record_id: str):
         doc.close()
         pdf_out = output_buffer.getvalue()
 
-        # 4. Enregistrement direct dans Airtable
-        table_docs = api.table(AIRTABLE_BASE_ID, TABLE_DOCS_NAME)
+        # 4. Enregistrement direct dans 'Dernier plan'
         table_docs.upload_attachment(record_id, "Dernier plan", "Plan_de_table_NOMINATIF.pdf", pdf_out)
-        print("Mise à jour Airtable réussie !")
+        print("✅ Fichier PDF déposé dans Airtable !")
+
+        # 5. Gestion des statuts : Passage à 'Done', puis 'Ready' après 5 secondes
+        table_docs.update(record_id, {"Statut": "Done"})
+        print("STATUS: Passer à 'Done'")
+
+        time.sleep(5)
+
+        table_docs.update(record_id, {"Statut": "Ready"})
+        print("STATUS: Retour à 'Ready'")
 
     except Exception as e:
-        print(f"Erreur pendant la génération : {e}")
+        print(f"❌ Erreur pendant le traitement : {e}")
+        # En cas d'erreur, on remet le statut sur Ready pour débloquer l'interface
+        try:
+            table_docs.update(record_id, {"Statut": "Ready"})
+        except Exception:
+            pass
 
 @app.get("/")
 def read_root():
@@ -167,7 +184,5 @@ def read_root():
 
 @app.post("/generate-plan")
 async def generate_plan(payload: PlanRequest, background_tasks: BackgroundTasks):
-    # Lancement du traitement en tâche de fond
     background_tasks.add_task(process_plan_in_background, payload.file_url, payload.record_id)
-    # Réponse immédiate pour Airtable (< 1 seconde)
     return {"status": "processing", "message": "Génération lancée en arrière-plan !"}
