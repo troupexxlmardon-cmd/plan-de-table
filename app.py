@@ -3,6 +3,7 @@ import pandas as pd
 import fitz  # PyMuPDF
 from pyairtable import Api
 import io
+import os
 
 # ==============================================================================
 # 🔑 VOS IDENTIFIANTS AIRTABLE (Remplacez les valeurs ci-dessous)
