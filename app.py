@@ -125,36 +125,33 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                             width=0.6 if is_vege else 0.5
                         )
                         
-                        # 2. Adaptation dynamique de la taille de police pour que tout rentre en largeur
+                        # 2. Adaptation dynamique de la taille de police
                         taille_police = 4.2
                         min_taille = 2.6
-                        largeur_max_permise = (RAYON * 2) - 4.0  # Marge de sécurité interne au rond
+                        largeur_max_permise = (RAYON * 2) - 4.0
                         
                         while taille_police >= min_taille:
-                            l1 = font.text_length(prenom, fontsize=taille_police)
-                            l2 = font.text_length(nom_famille, fontsize=taille_police) if nom_famille else 0
+                            l1 = fitz.get_text_length(prenom, fontname=font_name_use, fontsize=taille_police)
+                            l2 = fitz.get_text_length(nom_famille, fontname=font_name_use, fontsize=taille_police) if nom_famille else 0
                             if max(l1, l2) <= largeur_max_permise:
                                 break
                             taille_police -= 0.2
 
-                        # 3. Calculs métriques exacts pour un centrage vertical absolu
-                        ascent = font.ascent * taille_police
-                        descent = font.descent * taille_police  # Valeur négative
+                        # 3. Calculs métriques exacts avec ascender/descender
+                        ascent = font.ascender * taille_police
+                        descent = font.descender * taille_police
                         hauteur_ligne = ascent - descent
-                        interligne = hauteur_ligne * 0.25  # Espace naturel entre prénom et nom
+                        interligne = hauteur_ligne * 0.20
                         
                         nb_lignes = 2 if nom_famille else 1
                         hauteur_totale_bloc = (nb_lignes * hauteur_ligne) + ((nb_lignes - 1) * interligne)
                         
-                        # Détermination du haut du bloc visuel
                         haut_bloc = centre_y - (hauteur_totale_bloc / 2.0)
-                        
-                        # Coordonnée Y de la ligne de base (baseline) de la première ligne
                         baseline_1 = haut_bloc + ascent
                         
                         # 4. Écriture directe ligne par ligne
                         # Ligne 1 : Prénom
-                        larg_p = font.text_length(prenom, fontsize=taille_police)
+                        larg_p = fitz.get_text_length(prenom, fontname=font_name_use, fontsize=taille_police)
                         x_p = centre_x - (larg_p / 2.0)
                         page.insert_text(
                             fitz.Point(x_p, baseline_1),
@@ -167,7 +164,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         # Ligne 2 : Nom de famille (si présent)
                         if nom_famille:
                             baseline_2 = baseline_1 + hauteur_ligne + interligne
-                            larg_n = font.text_length(nom_famille, fontsize=taille_police)
+                            larg_n = fitz.get_text_length(nom_famille, fontname=font_name_use, fontsize=taille_police)
                             x_n = centre_x - (larg_n / 2.0)
                             page.insert_text(
                                 fitz.Point(x_n, baseline_2),
@@ -182,7 +179,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             doc.close()
             output_buffer.seek(0)
 
-            st.success("🎉 Plan de table généré avec succès !")
+            st.success("🎉 Plan de table généré !")
 
             st.download_button(
                 label="📥 Télécharger le Plan de Table PDF",
