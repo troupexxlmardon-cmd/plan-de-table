@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel  # <-- L'import manquant était ici !
+from pydantic import BaseModel
 import fitz  # PyMuPDF
 from pyairtable import Api
 import io
@@ -11,9 +11,10 @@ app = FastAPI(title="Générateur Plan de Table Airtable")
 # ==============================================================================
 # 🔑 VOS IDENTIFIANTS AIRTABLE
 # ==============================================================================
-AIRTABLE_TOKEN = "patUDyHWRx3FrQSqn.3ed2ae1fdae0357ba030ddbb947a06283860ff50f2e1fa9885977aaeda19add2"  # Votre Personal Access Token
-AIRTABLE_BASE_ID = "appqPIiZcZq2JRZpO"               # Votre Base ID
-AIRTABLE_TABLE_NAME = "Tables"                       # Nom exact de la table dans Airtable
+AIRTABLE_TOKEN = "patUDyHWRx3FrQSqn.3ed2ae1fdae0357ba030ddbb947a06283860ff50f2e1fa9885977aaeda19add2"
+AIRTABLE_BASE_ID = "appqPIiZcZq2JRZpO"
+TABLE_INVITES_NAME = "Tables"             # Table contenant les invités/places
+TABLE_DOCS_NAME = "Plan de table doc"     # Table contenant le doc PDF
 # ==============================================================================
 
 FONT_PATH = "Lora-Regular.ttf"
@@ -151,34 +152,16 @@ async def generate_plan(payload: PlanRequest):
                         x_n = centre_x - (larg_n / 2.0)
                         page.insert_text(fitz.Point(x_n, baseline_2), nom_famille, fontsize=taille_police, fontname=font_name_use, color=couleur_texte)
 
-        # Save result to bytes
         output_buffer = io.BytesIO()
         doc.save(output_buffer)
         doc.close()
         pdf_out = output_buffer.getvalue()
 
-        # 4. Upload ou mise à jour directe dans Airtable
-        # Note : PyAirtable accepte de mettre à jour un attachment via une URL temporaire ou en envoyant le fichier.
-        # Pour faire simple avec Airtable, on utilise l'API de transfert direct d'Airtable
+        # 4. Enregistrement direct du fichier dans 'Dernier plan'
         table_docs = api.table(AIRTABLE_BASE_ID, TABLE_DOCS_NAME)
-        
-        # Astuce : On upload le fichier généré en utilisant l'API d'attachment de pyairtable
-        # Si vous utilisez pyairtable 2.x+, upload d'attachement direct :
-        # On peut attacher directement le fichier via l'API Airtable
-        
-        # Pour une compatibilité maximale sans serveur de stockage externe :
-        # On sauve temporairement en mémoire et on injecte le fichier dans Airtable
-        import base64
-        # PyAirtable v2+ supporte l'attachment direct ou via URL.
-        # Sinon, pour la méthode la plus simple sans hébergement temporaire :
-        # On renvoie la réponse et laisse Airtable se mettre à jour via un webhook ou upload
-        
-        # Si vous utilisez pyairtable v2.2+ :
         table_docs.upload_attachment(payload.record_id, "Dernier plan", "Plan_de_table_NOMINATIF.pdf", pdf_out)
 
         return {"status": "success", "message": "Plan de table généré et enregistré dans 'Dernier plan'"}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
