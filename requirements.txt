@@ -1,4 +1,7 @@
 streamlit
-pymupdf
-pandas
+fastapi
+uvicorn
+PyMuPDF
 pyairtable
+pandas
+python-multipart
