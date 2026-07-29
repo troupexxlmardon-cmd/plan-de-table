@@ -82,14 +82,11 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]
 
-            # Chargement de la police pour le calcul métrique
+            # Charger la police externe Lora ou Helvetica par défaut
             if os.path.exists(FONT_PATH):
                 font = fitz.Font(fontfile=FONT_PATH)
-                font_name_use = "Lora"
-                page.insert_font(fontname="Lora", fontfile=FONT_PATH)
             else:
                 font = fitz.Font("helv")
-                font_name_use = "helv"
 
             words = page.get_text("words")
 
@@ -131,13 +128,13 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         largeur_max_permise = (RAYON * 2) - 4.0
                         
                         while taille_police >= min_taille:
-                            l1 = fitz.get_text_length(prenom, fontname=font_name_use, fontsize=taille_police)
-                            l2 = fitz.get_text_length(nom_famille, fontname=font_name_use, fontsize=taille_police) if nom_famille else 0
+                            l1 = font.text_length(prenom, fontsize=taille_police)
+                            l2 = font.text_length(nom_famille, fontsize=taille_police) if nom_famille else 0
                             if max(l1, l2) <= largeur_max_permise:
                                 break
                             taille_police -= 0.2
 
-                        # 3. Calculs métriques exacts avec ascender/descender
+                        # 3. Calculs métriques exacts pour un centrage parfait
                         ascent = font.ascender * taille_police
                         descent = font.descender * taille_police
                         hauteur_ligne = ascent - descent
@@ -149,28 +146,28 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         haut_bloc = centre_y - (hauteur_totale_bloc / 2.0)
                         baseline_1 = haut_bloc + ascent
                         
-                        # 4. Écriture directe ligne par ligne
-                        # Ligne 1 : Prénom
-                        larg_p = fitz.get_text_length(prenom, fontname=font_name_use, fontsize=taille_police)
+                        # 4. Écriture directe des lignes via l'objet font
+                        # Prénom
+                        larg_p = font.text_length(prenom, fontsize=taille_police)
                         x_p = centre_x - (larg_p / 2.0)
                         page.insert_text(
                             fitz.Point(x_p, baseline_1),
                             prenom,
                             fontsize=taille_police,
-                            fontname=font_name_use,
+                            font=font,
                             color=couleur_texte
                         )
                         
-                        # Ligne 2 : Nom de famille (si présent)
+                        # Nom de famille
                         if nom_famille:
                             baseline_2 = baseline_1 + hauteur_ligne + interligne
-                            larg_n = fitz.get_text_length(nom_famille, fontname=font_name_use, fontsize=taille_police)
+                            larg_n = font.text_length(nom_famille, fontsize=taille_police)
                             x_n = centre_x - (larg_n / 2.0)
                             page.insert_text(
                                 fitz.Point(x_n, baseline_2),
                                 nom_famille,
                                 fontsize=taille_police,
-                                fontname=font_name_use,
+                                font=font,
                                 color=couleur_texte
                             )
 
@@ -179,7 +176,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
             doc.close()
             output_buffer.seek(0)
 
-            st.success("🎉 Plan de table généré !")
+            st.success("🎉 Plan de table généré avec un centrage parfait !")
 
             st.download_button(
                 label="📥 Télécharger le Plan de Table PDF",
