@@ -17,16 +17,15 @@ st.set_page_config(page_title="Générateur de Plan de Table", page_icon="🪑",
 st.title("🪑 Générateur de Plan de Table Nominatif")
 st.write("Déposez votre PDF Canva pour générer automatiquement votre plan à jour depuis Airtable.")
 
-# Couleurs RGB (0 à 1)
-COULEUR_TEXTE_NORMAL   = (0.2, 0.2, 0.2)
-COULEUR_BORDURE_NORMAL = (0.75, 0.75, 0.75)
+# --- COULEURS RGB (valeurs entre 0 et 1) ---
+COULEUR_TEXTE_NORMAL   = (0.2, 0.2, 0.2)     # Noir / Gris foncé
+COULEUR_BORDURE_NORMAL = (0.75, 0.75, 0.75)  # Gris clair
 
-COULEUR_TEXTE_VEGE     = (0.12, 0.52, 0.29)
-COULEUR_BORDURE_VEGE   = (0.12, 0.52, 0.29)
+COULEUR_TEXTE_VEGE     = (0.12, 0.52, 0.29)  # Vert
+COULEUR_BORDURE_VEGE   = (0.12, 0.52, 0.29)  # Vert assorti
 
-COULEUR_FOND           = (1, 1, 1)
+COULEUR_FOND           = (1, 1, 1)           # Blanc
 
-# Zone de dépôt unique pour le PDF
 pdf_file = st.file_uploader("Déposez le PDF Canva (ex: plan_de_table_canva.pdf)", type=["pdf"])
 
 if st.button("🚀 Générer le plan de table", type="primary", use_container_width=True):
@@ -45,9 +44,27 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                 fields = r.get("fields", {})
                 
                 num_place = fields.get("Numéro place")
-                nom_invite = fields.get("Invité")
+                nom_raw = fields.get("Invité")
                 
-                # Statut végétarien
+                # --- Traitement spécifique si "Invité" est une liste (Linked Record / Lookup) ---
+                nom_invite = ""
+                if isinstance(nom_raw, list) and len(nom_raw) > 0:
+                    nom_invite = str(nom_raw[0])
+                elif isinstance(nom_raw, str):
+                    nom_invite = nom_raw
+                
+                # Si la valeur obtenue est un Record ID (ex: 'recXYZ'), on cherche un champ texte dans la ligne
+                if nom_invite.startswith("rec"):
+                    for k, v in fields.items():
+                        if any(term in k.lower() for term in ["invité", "nom", "prenom", "invite"]):
+                            if isinstance(v, str) and not v.startswith("rec"):
+                                nom_invite = v
+                                break
+                            elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], str) and not v[0].startswith("rec"):
+                                nom_invite = v[0]
+                                break
+
+                # --- Récupération du statut végétarien ---
                 col_vege_val = None
                 for k, v in fields.items():
                     if "Végétarien" in k:
@@ -61,7 +78,8 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                     if str(col_vege_val).strip().lower() in ['oui', 'yes', 'true', '1']:
                         is_vege = True
 
-                if num_place and nom_invite:
+                # Découpage du prénom et du nom
+                if num_place and nom_invite and not nom_invite.startswith("rec"):
                     try:
                         num_place = int(num_place)
                         parties = str(nom_invite).strip().split(maxsplit=1)
@@ -105,6 +123,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         couleur_texte = COULEUR_TEXTE_VEGE if is_vege else COULEUR_TEXTE_NORMAL
                         couleur_bordure = COULEUR_BORDURE_VEGE if is_vege else COULEUR_BORDURE_NORMAL
                         
+                        # Dessin du pavé blanc avec la bordure (verte pour végé, grise sinon)
                         page.draw_rect(
                             rect_pave, 
                             color=couleur_bordure, 
@@ -114,6 +133,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                         
                         FONT_SIZE = 4.5
                         
+                        # Écriture du prénom et du nom
                         if nom_famille:
                             rect_prenom = fitz.Rect(rect_pave.x0, rect_pave.y0 + 1.0, rect_pave.x1, rect_pave.y0 + MARGE_Y + 1.0)
                             rect_nom = fitz.Rect(rect_pave.x0, rect_pave.y0 + MARGE_Y - 2.0, rect_pave.x1, rect_pave.y1 - 1.0)
@@ -123,7 +143,7 @@ if st.button("🚀 Générer le plan de table", type="primary", use_container_wi
                             rect_seul = fitz.Rect(rect_pave.x0, rect_pave.y0 + (MARGE_Y / 2), rect_pave.x1, rect_pave.y1 - (MARGE_Y / 2))
                             page.insert_textbox(rect_seul, prenom, fontsize=FONT_SIZE, fontname="helv", color=couleur_texte, align=fitz.TEXT_ALIGN_CENTER)
 
-            # 3. Export
+            # 3. Export du PDF
             output_buffer = io.BytesIO()
             doc.save(output_buffer)
             doc.close()
