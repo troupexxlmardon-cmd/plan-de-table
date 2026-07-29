@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 import fitz  # PyMuPDF
 from pyairtable import Api
@@ -23,21 +23,17 @@ class PlanRequest(BaseModel):
     file_url: str
     record_id: str
 
-@app.get("/")
-def read_root():
-    return {"message": "L'API du Plan de Table fonctionne correctement !"}
-
-@app.post("/generate-plan")
-async def generate_plan(payload: PlanRequest):
+def process_plan_in_background(file_url: str, record_id: str):
     try:
-        # 1. Téléchargement du PDF source depuis l'URL Airtable
-        pdf_response = requests.get(payload.file_url)
+        # 1. Téléchargement du PDF source
+        pdf_response = requests.get(file_url)
         if pdf_response.status_code != 200:
-            raise HTTPException(status_code=400, detail="Impossible de télécharger le PDF source.")
+            print("Erreur de téléchargement du PDF source")
+            return
         
         pdf_bytes = pdf_response.content
 
-        # 2. Récupération des invités depuis Airtable
+        # 2. Récupération des invités
         api = Api(AIRTABLE_TOKEN)
         table_invites = api.table(AIRTABLE_BASE_ID, TABLE_INVITES_NAME)
         records = table_invites.all()
@@ -157,11 +153,21 @@ async def generate_plan(payload: PlanRequest):
         doc.close()
         pdf_out = output_buffer.getvalue()
 
-        # 4. Enregistrement direct du fichier dans 'Dernier plan'
+        # 4. Enregistrement direct dans Airtable
         table_docs = api.table(AIRTABLE_BASE_ID, TABLE_DOCS_NAME)
-        table_docs.upload_attachment(payload.record_id, "Dernier plan", "Plan_de_table_NOMINATIF.pdf", pdf_out)
-
-        return {"status": "success", "message": "Plan de table généré et enregistré dans 'Dernier plan'"}
+        table_docs.upload_attachment(record_id, "Dernier plan", "Plan_de_table_NOMINATIF.pdf", pdf_out)
+        print("Mise à jour Airtable réussie !")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Erreur pendant la génération : {e}")
+
+@app.get("/")
+def read_root():
+    return {"message": "L'API du Plan de Table fonctionne correctement !"}
+
+@app.post("/generate-plan")
+async def generate_plan(payload: PlanRequest, background_tasks: BackgroundTasks):
+    # Lancement du traitement en tâche de fond
+    background_tasks.add_task(process_plan_in_background, payload.file_url, payload.record_id)
+    # Réponse immédiate pour Airtable (< 1 seconde)
+    return {"status": "processing", "message": "Génération lancée en arrière-plan !"}
