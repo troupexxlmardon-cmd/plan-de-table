@@ -33,7 +33,7 @@ def process_plan_in_background(file_url: str, record_id: str):
         # 1. Téléchargement du PDF source
         pdf_response = requests.get(file_url)
         if pdf_response.status_code != 200:
-            print("❌ Erreur de téléchargement du PDF source")
+            print(f"❌ Erreur de téléchargement du PDF source (Status Code: {pdf_response.status_code})")
             table_docs.update(record_id, {"Statut": "Ready"})
             return
         
@@ -87,13 +87,13 @@ def process_plan_in_background(file_url: str, record_id: str):
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         page = doc[0]
 
-        if os.path.exists(FONT_PATH):
+        # Vérification et configuration de la police
+        use_custom_font = os.path.exists(FONT_PATH)
+        
+        if use_custom_font:
             font = fitz.Font(fontfile=FONT_PATH)
-            font_name_use = "Lora"
-            page.insert_font(fontname="Lora", fontfile=FONT_PATH)
         else:
             font = fitz.Font("helv")
-            font_name_use = "helv"
 
         words = page.get_text("words")
 
@@ -145,14 +145,25 @@ def process_plan_in_background(file_url: str, record_id: str):
                     
                     larg_p = font.text_length(prenom, fontsize=taille_police)
                     x_p = centre_x - (larg_p / 2.0)
-                    page.insert_text(fitz.Point(x_p, baseline_1), prenom, fontsize=taille_police, fontname=font_name_use, color=couleur_texte)
+
+                    # Insertion du prénom (avec fontfile si la police existe)
+                    if use_custom_font:
+                        page.insert_text(fitz.Point(x_p, baseline_1), prenom, fontsize=taille_police, fontfile=FONT_PATH, color=couleur_texte)
+                    else:
+                        page.insert_text(fitz.Point(x_p, baseline_1), prenom, fontsize=taille_police, fontname="helv", color=couleur_texte)
                     
                     if nom_famille:
                         baseline_2 = baseline_1 + hauteur_ligne + interligne
                         larg_n = font.text_length(nom_famille, fontsize=taille_police)
                         x_n = centre_x - (larg_n / 2.0)
-                        page.insert_text(fitz.Point(x_n, baseline_2), nom_famille, fontsize=taille_police, fontname=font_name_use, color=couleur_texte)
+                        
+                        # Insertion du nom (avec fontfile si la police existe)
+                        if use_custom_font:
+                            page.insert_text(fitz.Point(x_n, baseline_2), nom_famille, fontsize=taille_police, fontfile=FONT_PATH, color=couleur_texte)
+                        else:
+                            page.insert_text(fitz.Point(x_n, baseline_2), nom_famille, fontsize=taille_police, fontname="helv", color=couleur_texte)
 
+        # Génération des octets du fichier PDF final (BLOC RÉTABLI)
         output_buffer = io.BytesIO()
         doc.save(output_buffer)
         doc.close()
