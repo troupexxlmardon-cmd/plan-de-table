@@ -6,12 +6,13 @@ import io
 import os
 import requests
 import time
-import traceback  # <-- Ajout pour capturer les détails de l'erreur
+import re
+import traceback
 
 app = FastAPI(title="Générateur Plan de Table Airtable")
 
 # ==============================================================================
-# 🔑 VOS IDENTIFIANTS AIRTABLE
+# 🔑 IDENTIFIANTS AIRTABLE
 # ==============================================================================
 AIRTABLE_TOKEN = "patUeoUFl3qVPww4b.01ee555ff3aef9d6c3993102a1438919965e1d1e3b5df4062f8f2d3d858fb948"
 AIRTABLE_BASE_ID = "appqPIiZcZq2JRZpO"
@@ -39,7 +40,7 @@ def process_plan_in_background(file_url: str, record_id: str):
         
         pdf_bytes = pdf_response.content
 
-        # 2. Récupération des invités
+        # 2. Récupération des invités depuis Airtable
         table_invites = api.table(AIRTABLE_BASE_ID, TABLE_INVITES_NAME)
         records = table_invites.all()
 
@@ -47,14 +48,17 @@ def process_plan_in_background(file_url: str, record_id: str):
         for r in records:
             fields = r.get("fields", {})
             num_place = fields.get("Numéro place") or fields.get("Numero place") or fields.get("Place")
-            raw_nom = fields.get("Nom complet")
             
+            # Extraction propre du champ Lookup "Nom complet"
+            raw_nom = fields.get("Nom complet")
             nom_invite = ""
+            
             if isinstance(raw_nom, list) and len(raw_nom) > 0:
-                nom_invite = str(raw_nom[0])
+                nom_invite = str(raw_nom[0]).strip()
             elif isinstance(raw_nom, str):
-                nom_invite = raw_nom
+                nom_invite = raw_nom.strip()
 
+            # Extraction de la préférence végétarienne
             col_vege_val = None
             for k, v in fields.items():
                 if "végétarien" in k.lower() or "vege" in k.lower():
@@ -68,10 +72,11 @@ def process_plan_in_background(file_url: str, record_id: str):
                 if str(col_vege_val).strip().lower() in ['oui', 'yes', 'true', '1']:
                     is_vege = True
 
+            # Si la place et le nom sont valides
             if num_place is not None and nom_invite and not nom_invite.startswith("rec"):
                 try:
                     num_place_int = int(num_place)
-                    parties = str(nom_invite).strip().split(maxsplit=1)
+                    parties = nom_invite.split(maxsplit=1)
                     prenom = parties[0]
                     nom_famille = parties[1] if len(parties) > 1 else ""
                     
@@ -83,13 +88,13 @@ def process_plan_in_background(file_url: str, record_id: str):
                 except (ValueError, TypeError):
                     continue
 
+        print(f"📋 Total de places chargées depuis Airtable : {len(place_info)}")
+
         # 3. Traitement du PDF
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         page = doc[0]
 
-        # Vérification et configuration de la police
         use_custom_font = os.path.exists(FONT_PATH)
-        
         if use_custom_font:
             font = fitz.Font(fontfile=FONT_PATH)
         else:
@@ -103,10 +108,15 @@ def process_plan_in_background(file_url: str, record_id: str):
         COULEUR_BORDURE_VEGE   = (0.12, 0.52, 0.29)
         COULEUR_FOND           = (1, 1, 1)
 
+        places_placees = 0
+
         for word in words:
-            texte_mot = word[4].strip()
-            if texte_mot.isdigit():
-                num_place = int(texte_mot)
+            texte_brut = word[4].strip()
+            # On extrait uniquement les chiffres du mot (ex: "12." -> "12")
+            chiffres = re.sub(r'\D', '', texte_brut)
+
+            if chiffres.isdigit() and len(chiffres) > 0:
+                num_place = int(chiffres)
                 if num_place in place_info:
                     info = place_info[num_place]
                     prenom, nom_famille, is_vege = info['prenom'], info['nom'], info['is_vege']
@@ -146,7 +156,6 @@ def process_plan_in_background(file_url: str, record_id: str):
                     larg_p = font.text_length(prenom, fontsize=taille_police)
                     x_p = centre_x - (larg_p / 2.0)
 
-                    # Insertion du prénom (avec fontfile si la police existe)
                     if use_custom_font:
                         page.insert_text(fitz.Point(x_p, baseline_1), prenom, fontsize=taille_police, fontfile=FONT_PATH, color=couleur_texte)
                     else:
@@ -157,13 +166,16 @@ def process_plan_in_background(file_url: str, record_id: str):
                         larg_n = font.text_length(nom_famille, fontsize=taille_police)
                         x_n = centre_x - (larg_n / 2.0)
                         
-                        # Insertion du nom (avec fontfile si la police existe)
                         if use_custom_font:
                             page.insert_text(fitz.Point(x_n, baseline_2), nom_famille, fontsize=taille_police, fontfile=FONT_PATH, color=couleur_texte)
                         else:
                             page.insert_text(fitz.Point(x_n, baseline_2), nom_famille, fontsize=taille_police, fontname="helv", color=couleur_texte)
 
-        # Génération des octets du fichier PDF final (BLOC RÉTABLI)
+                    places_placees += 1
+
+        print(f"🎯 Nombre de prénoms inscrits sur le PDF : {places_placees}")
+
+        # Génération des octets du fichier PDF final
         output_buffer = io.BytesIO()
         doc.save(output_buffer)
         doc.close()
@@ -173,7 +185,7 @@ def process_plan_in_background(file_url: str, record_id: str):
         table_docs.upload_attachment(record_id, "Dernier plan", "Plan_de_table_NOMINATIF.pdf", pdf_out)
         print("✅ Fichier PDF déposé dans Airtable !")
 
-        # 5. Gestion des statuts : Passage à 'Done', puis 'Ready' après 5 secondes
+        # 5. Gestion des statuts
         table_docs.update(record_id, {"Statut": "Done"})
         print("STATUS: Passer à 'Done'")
 
@@ -186,7 +198,6 @@ def process_plan_in_background(file_url: str, record_id: str):
         print(f"❌ Erreur pendant le traitement : {e}")
         print("🔍 TRACEBACK COMPLET :")
         print(traceback.format_exc())
-        # En cas d'erreur, on remet le statut sur Ready pour débloquer l'interface
         try:
             table_docs.update(record_id, {"Statut": "Ready"})
         except Exception:
