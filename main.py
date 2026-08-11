@@ -6,6 +6,7 @@ import io
 import os
 import requests
 import time
+import traceback  # <-- Ajout pour capturer les détails de l'erreur
 
 app = FastAPI(title="Générateur Plan de Table Airtable")
 
@@ -172,6 +173,8 @@ def process_plan_in_background(file_url: str, record_id: str):
 
     except Exception as e:
         print(f"❌ Erreur pendant le traitement : {e}")
+        print("🔍 TRACEBACK COMPLET :")
+        print(traceback.format_exc())
         # En cas d'erreur, on remet le statut sur Ready pour débloquer l'interface
         try:
             table_docs.update(record_id, {"Statut": "Ready"})
